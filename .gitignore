@@ -1,0 +1,4 @@
+.venv
+client_uploads
+modules/__pycache__
+troycon_research_env

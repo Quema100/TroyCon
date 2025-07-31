@@ -1,0 +1,13 @@
+{
+  "name": "troycon",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "c2_server.js",
+  "scripts": {
+    "start": "node c2_server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
