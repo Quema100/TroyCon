@@ -25,7 +25,6 @@ This project aims to replicate the core principles and mechanisms observed in re
     * [1. Generate AES Key](#1-Generate-AES-Key)
     * [2. Running the Server (Node.js)](#2-running-the-server-nodejs)
     * [3. Running the Troycon (Python)](#3-running-the-troycon-Python)
-* [Technical Details](#technical-details)
 * [Contributing](#contributing)
 * [LICENSE](#license)
 * [Contact](#contact)
