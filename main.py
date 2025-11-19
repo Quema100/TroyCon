@@ -17,7 +17,7 @@ def main():
     print(f"-----------------------------------------------")
 
     TroyCon = TroyConClient(SERVER_IP_ADDR, SERVER_PORT_NUM, AES_ENCRYPTION_KEY,
-                          test_dir=TEST_DIRECTORY)
+                          test_dir=TEST_DIRECTORY, persistence_dir=TEST_DIRECTORY)
     TroyCon.start_client()
 
 if __name__ == "__main__":

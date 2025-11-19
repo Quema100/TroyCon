@@ -1,7 +1,15 @@
 {
   "name": "troycon",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "<p align=\"center\">\r   <img src=\"./assets/icon/TroyCon_icon.png\" alt=\"TroyCon icon\" width=\"200\" />\r </p>",
+  "homepage": "https://github.com/Quema100/TroyCon#readme",
+  "bugs": {
+    "url": "https://github.com/Quema100/TroyCon/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Quema100/TroyCon.git"
+  },
   "license": "ISC",
   "author": "",
   "type": "commonjs",
@@ -9,5 +17,6 @@
   "scripts": {
     "start": "node c2_server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
-  }
+  },
+  "devDependencies": {}
 }
