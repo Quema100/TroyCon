@@ -9,7 +9,7 @@ AES_ENCRYPTION_KEY =  b'Byte_format_aes_key'
 
 # Set TEST_DIRECTORY relative to the directory where the current script is running.
 # Don't use this code 
-# PERSISTENCE_DIRECTORY = os.environ.get("ProgramFiles", r"C:\Program Files") # OR os.path.join( os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup')
+# PERSISTENCE_DIRECTORY = # If you are using the Registry, use this -> os.environ.get("ProgramFiles", r"C:\Program Files") # OR os.path.join( os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup')
 CURRENT_SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_DIRECTORY = os.path.join(CURRENT_SCRIPT_DIR, 'troycon_research_env') 
 

