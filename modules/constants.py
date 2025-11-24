@@ -13,4 +13,4 @@ AES_ENCRYPTION_KEY =  b'Byte_format_aes_key'
 CURRENT_SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_DIRECTORY = os.path.join(CURRENT_SCRIPT_DIR, 'troycon_research_env') 
 
-RECONNECTION_DELAY_SECONDS = 5   # Reconnection delay time when C2 server connection fails.
+RECONNECTION_DELAY_SECONDS = 5 # Reconnection delay time when C2 server connection fails.
