@@ -35,8 +35,11 @@ class TroyConClient:
         :param server_port: Port number of the C2 server
         :param aes_key: AES symmetric key for communication encryption (32 bytes)
         :param test_dir: Directory path where all client operations (file creation, command execution) are restricted.
-                        If not specified, the current directory at client startup is used.
-                        Strongly recommended to set this value for safety in research environments.
+                         If not specified, the current directory at client startup is used.
+                         Strongly recommended to set this value for safety in research environments.
+        :param persistence_dir: Directory path where the client will copy itself for persistence.
+                                If not specified, the current directory at client startup is used.
+                                Strongly recommended to set this value for safety in research environments.
         """
         self.server_ip = server_ip
         self.server_port = server_port
