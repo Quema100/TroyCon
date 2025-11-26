@@ -5,7 +5,8 @@ SERVER_IP_ADDR = '127.0.0.1'
 SERVER_PORT_NUM = 4444
 
 # Use the same 32-byte (64 hexadecimal characters) key as the Node.js server.
-AES_ENCRYPTION_KEY =  b'Byte_format_aes_key'
+# TODO: Connect using the ECDH algorithm
+AES_ENCRYPTION_KEY = b'Byte_format_aes_key'
 
 # Set TEST_DIRECTORY relative to the directory where the current script is running.
 # Don't use this code 
