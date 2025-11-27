@@ -22,9 +22,8 @@ This project aims to replicate the core principles and mechanisms observed in re
 * [Prerequisites](#prerequisites)
 * [Installation](#installation)
 * [Usage](#usage)
-    * [1. Generate AES Key](#1-Generate-AES-Key)
-    * [2. Running the Server (Node.js)](#2-running-the-server-nodejs)
-    * [3. Running the Troycon (Python)](#3-running-the-troycon-Python)
+    * [1. Running the Server (Node.js)](#1-running-the-server-nodejs)
+    * [2. Running the Troycon (Python)](#2-running-the-troycon-Python)
 * [Contributing](#contributing)
 * [LICENSE](#license)
 * [Contact](#contact)
@@ -33,11 +32,11 @@ This project aims to replicate the core principles and mechanisms observed in re
 
 TroyCon is a Trojan horse simulation tool designed exclusively for educational and research purposes.  
 This project replicates the core principles and mechanisms observed in real backdoor malware, including covert Command & Control (C2) communication, remote command execution, and file transfer.  
-The simulation consists of a Python-based client and a Node.js-based C2 server, implementing a system similar to real attacker environments through AES-256-CBC encryption.  
+The simulation consists of a Python-based client and a Node.js-based C2 server, implementing a system that securely establishes dynamic AES-256-CBC encryption keys through Diffie-Hellman key exchange, closely mimicking real attacker environments.
 
 ## Features
 
-* AES-256-CBC Encrypted Communication: All network data is protected using symmetric key encryption.
+* Dynamic AES-256-CBC Encrypted Communication: Establishes session keys securely via Diffie-Hellman key exchange to protect all network data with symmetric encryption.
 
 * C2 Server Communication: Supports receiving commands and sending results via TCP sockets.
 
@@ -58,7 +57,7 @@ The simulation consists of a Python-based client and a Node.js-based C2 server, 
 ``` bash
 EchoCrypt/
 ├── main.py   
-├── AES_KEY.py
+├── AES_KEY.py // This code is no longer necessary.
 ├── modules/
 │   ├── troycon.py 
 │   ├── constants.py 
@@ -88,36 +87,7 @@ EchoCrypt/
     ```
 ## Usage
 
-### 1. Generate AES Key
-
-The client requires the key in Python byte literal format, while the server uses a hexadecimal string format.
-
-> [!IMPORTANT]
-> The AES-256 key must be exactly 32 bytes (256 bits) in length.
-
-To generate a compatible AES key for both the client and server, run the AES_KEY.py script.  
-Open a **separate terminal window** and run:  
-
-```bash
-python AES_KEY.py
-```
-
-This will output the key in both formats for easy configuration.
-
-> [!TIP]
-> **How to run this program on another PC**  
->  To run this program on another PC, follow these simple steps:  
->   1. install pyinstaller:
->       ``` ps
->       pip install pyinstaller
->       ```
->   2. Build:
->      ``` ps
->      pyinstaller -w -F -n=TroyCon --icon=./assets/icon/TroyCon_icon.ico main.py
->      ```
-
-
-### 2. Running the Server (Node.js)
+### 1. Running the Server (Node.js)
 
 To launch the C2 server, run:
 
@@ -134,7 +104,7 @@ To interact with a client, you can input commands in the following format via th
 [client_address] PUT_FILE /path/to/local_file.txt /path/to/directory/remote_file.txt
 ```
 
-### 3. Running the Troycon (Python)
+### 2. Running the Troycon (Python)
 
 Run the Python client script:
 
@@ -143,6 +113,18 @@ python main.py
 ```
 
 The client connects to the C2 server using the AES key you generated, executing commands, uploading/downloading files, and maintaining stealth and persistence within a specified test directory.  
+
+> [!TIP]
+> **How to run this program on another PC**  
+>  To run this program on another PC, follow these simple steps:  
+>   1. install pyinstaller:
+>       ``` ps
+>       pip install pyinstaller
+>       ```
+>   2. Build:
+>      ``` ps
+>      pyinstaller -w -F -n=TroyCon --icon=./assets/icon/TroyCon_icon.ico main.py
+>      ```
 
 ## Contributing
 
