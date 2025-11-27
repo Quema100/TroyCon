@@ -5,4 +5,4 @@ from .constants import (
 )
 
 __all__ = ["TroyConClient",(SERVER_IP_ADDR, SERVER_PORT_NUM, CURRENT_SCRIPT_DIR, TEST_DIRECTORY, RECONNECTION_DELAY_SECONDS)]
-__version__ = "1.0.0"
+__version__ = "1.1.0"
