@@ -1,6 +1,7 @@
 import os
 import sys
 import socket
+import locale
 # Uncomment this section if you intend to use the shutil module.
 # import shutil 
 import subprocess
@@ -388,13 +389,15 @@ class TroyConClient:
                 return f"[Error] {e}".encode('utf-8')
             
         try:
+            encoding = locale.getpreferredencoding() or 'utf-8'
+
             # Execute command using subprocess (capture stdout and stderr)
             proc = subprocess.Popen(cmd, shell=True,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     stdin=subprocess.PIPE,
                                     text=True,
-                                    encoding='cp949', # Default Korean encoding on Windows
+                                    encoding=encoding, # Default utf-8 encoding on Windows
                                     errors='replace',
                                     cwd=self.test_dir)
             out, err = proc.communicate() # Wait for execution to complete
